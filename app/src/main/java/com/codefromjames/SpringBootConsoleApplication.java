@@ -1,6 +1,9 @@
 package com.codefromjames;
 
+import io.lettuce.core.ReadFrom;
 import io.lettuce.core.RedisURI;
+import io.lettuce.core.cluster.ClusterClientOptions;
+import io.lettuce.core.cluster.ClusterTopologyRefreshOptions;
 import io.lettuce.core.cluster.RedisClusterClient;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
 import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
@@ -14,6 +17,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -37,12 +42,27 @@ public class SpringBootConsoleApplication implements CommandLineRunner {
         }
 
         final List<RedisURI> hosts = List.of(
-                RedisURI.create("redis://localhost:6379"),
-                RedisURI.create("redis://localhost:6380"),
-                RedisURI.create("redis://localhost:6381")
-        );
+                RedisURI.create("redis://redis01:6379"),
+                RedisURI.create("redis://redis02:6380"),
+                RedisURI.create("redis://redis03:6381"),
+                RedisURI.create("redis://redis04:6382"),
+                RedisURI.create("redis://redis05:6383"),
+                RedisURI.create("redis://redis06:6384"));
+        hosts.forEach(h -> h.setTimeout(Duration.ofSeconds(5))); // TODO: Not sure if this is the right way to timeout commands
+
         try (final RedisClusterClient redisClient = RedisClusterClient.create(hosts);
              final StatefulRedisClusterConnection<String, byte[]> connection = redisClient.connect(StringBytesCodec.INSTANCE)) {
+            redisClient.setOptions(ClusterClientOptions.builder()
+                    .autoReconnect(true)
+                    .validateClusterNodeMembership(false) // important for when nodes are added/removed!
+                    .topologyRefreshOptions(ClusterTopologyRefreshOptions.builder()
+                            .enablePeriodicRefresh(Duration.of(10, ChronoUnit.SECONDS))
+                            .enableAllAdaptiveRefreshTriggers()
+                            .build())
+                    .build());
+
+            connection.setReadFrom(ReadFrom.MASTER); // Highest consistency
+
             final RedisAdvancedClusterCommands<String, byte[]> client = connection.sync();
             IntStream.range(0, 8)
                     .mapToObj(i -> {

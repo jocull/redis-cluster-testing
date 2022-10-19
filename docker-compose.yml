@@ -1,0 +1,18 @@
+version: "3.9"
+networks:
+  default:
+    name: redis-net
+    external: true
+volumes:
+  maven:
+services:
+  app:
+    build:
+      dockerfile: ./Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - maven:/root/.m2
+      - ./app:/build
+    # change between suspend=y and =n to pause for remote debugger or not
+    command: mvn clean spring-boot:run -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:8000"

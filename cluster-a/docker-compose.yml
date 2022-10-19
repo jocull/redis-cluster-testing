@@ -8,14 +8,14 @@ services:
     image: redis:7.0.5
     ports:
       - "6379:6379"
-    command: redis-server --cluster-enabled yes --port 6379
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis01 --cluster-preferred-endpoint-type hostname
   redis02:
     image: redis:7.0.5
     ports:
       - "6380:6380"
-    command: redis-server --cluster-enabled yes --port 6380
+    command: redis-server --cluster-enabled yes --port 6380 --cluster-announce-hostname redis02 --cluster-preferred-endpoint-type hostname
   redis03:
     image: redis:7.0.5
     ports:
       - "6381:6381"
-    command: redis-server --cluster-enabled yes --port 6381
+    command: redis-server --cluster-enabled yes --port 6381 --cluster-announce-hostname redis03 --cluster-preferred-endpoint-type hostname

@@ -4,3 +4,18 @@ networks:
     name: redis-net
     external: true
 services:
+  redis04:
+    image: redis:7.0.5
+    ports:
+      - "6382:6382"
+    command: redis-server --cluster-enabled yes --port 6382 --cluster-announce-hostname redis04 --cluster-preferred-endpoint-type hostname
+  redis05:
+    image: redis:7.0.5
+    ports:
+      - "6383:6383"
+    command: redis-server --cluster-enabled yes --port 6383 --cluster-announce-hostname redis05 --cluster-preferred-endpoint-type hostname
+  redis06:
+    image: redis:7.0.5
+    ports:
+      - "6384:6384"
+    command: redis-server --cluster-enabled yes --port 6384 --cluster-announce-hostname redis06 --cluster-preferred-endpoint-type hostname
