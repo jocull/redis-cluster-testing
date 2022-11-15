@@ -9,8 +9,10 @@ docker exec -it cluster-a-redis01-1 redis-cli --cluster create redis01:6379 redi
 Add a node to cluster:
 
 ```
-# Connect it to the cluster
-docker exec -it cluster-a-redis01-1 redis-cli --cluster add-node redis04:6382 redis01:6379 --cluster-yes
+# Connect it to the cluster (automatically selects an under-replicated primary)
+docker exec -it cluster-a-redis01-1 redis-cli --cluster add-node redis04:6382 redis01:6379 --cluster-slave --cluster-yes
+docker exec -it cluster-a-redis01-1 redis-cli --cluster add-node redis05:6383 redis01:6379 --cluster-slave --cluster-yes
+docker exec -it cluster-a-redis01-1 redis-cli --cluster add-node redis06:6384 redis01:6379 --cluster-slave --cluster-yes
 ```
 
 Rebalancing data into a new primary node:
@@ -20,7 +22,7 @@ Rebalancing data into a new primary node:
 docker exec -it cluster-a-redis01-1 redis-cli --cluster rebalance redis01:6379 --cluster-use-empty-masters
 ```
 
-Adding a replica to a primary node:
+Adding a replica to a specific primary node:
 
 ```
 # Lookup node id to find the one you wish to replicate
