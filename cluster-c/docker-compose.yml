@@ -49,3 +49,25 @@ services:
     ports:
       - "6408:6408"
     command: redis-server --cluster-enabled yes --port 6408 --cluster-announce-hostname redis09 --cluster-preferred-endpoint-type hostname
+  activate:
+    image: redis:7.0.5
+    depends_on:
+      - redis01
+      - redis02
+      - redis03
+      - redis04
+      - redis05
+      - redis06
+      - redis07
+      - redis08
+      - redis09
+    command: >
+      bash -c "
+      sleep 10
+      && redis-cli --cluster create redis01:6400 redis02:6401 redis03:6402 --cluster-yes
+      && redis-cli --cluster add-node redis04:6403 redis01:6400 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis05:6404 redis01:6400 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis06:6405 redis01:6400 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis07:6406 redis01:6400 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis08:6407 redis01:6400 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis09:6408 redis01:6400 --cluster-slave --cluster-yes"
