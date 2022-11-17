@@ -47,8 +47,8 @@ public class LargeThrashingTest implements Runnable {
         this.valueSizeBytes = valueSizeBytes;
 
         this.retry = Retry.of("default", RetryConfig.custom()
-                .maxAttempts(20)
-                .intervalFunction(IntervalFunction.ofExponentialBackoff(Duration.ofMillis(50), 2, Duration.ofSeconds(5)))
+                .maxAttempts(30)
+                .intervalFunction(IntervalFunction.ofExponentialBackoff(Duration.ofMillis(50), 2, Duration.ofSeconds(1)))
                 .failAfterMaxAttempts(true)
                 .retryOnException(ex -> ex instanceof RedisException)
                 .build());

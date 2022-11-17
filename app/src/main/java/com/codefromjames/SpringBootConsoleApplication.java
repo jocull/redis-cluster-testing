@@ -44,12 +44,15 @@ public class SpringBootConsoleApplication implements CommandLineRunner {
         }
 
         final List<RedisURI> hosts = List.of(
-                RedisURI.create("redis://redis01:6379"),
-                RedisURI.create("redis://redis02:6380"),
-                RedisURI.create("redis://redis03:6381"),
-                RedisURI.create("redis://redis04:6382"),
-                RedisURI.create("redis://redis05:6383"),
-                RedisURI.create("redis://redis06:6384"));
+                RedisURI.create("redis://redis01"),
+                RedisURI.create("redis://redis02"),
+                RedisURI.create("redis://redis03"),
+                RedisURI.create("redis://redis04"),
+                RedisURI.create("redis://redis05"),
+                RedisURI.create("redis://redis06"),
+                RedisURI.create("redis://redis07"),
+                RedisURI.create("redis://redis08"),
+                RedisURI.create("redis://redis09"));
         hosts.forEach(h -> h.setTimeout(Duration.ofSeconds(5))); // TODO: Not sure if this is the right way to timeout commands
 
         try (final RedisClusterClient redisClient = RedisClusterClient.create(hosts);

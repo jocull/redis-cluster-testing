@@ -6,49 +6,31 @@ networks:
 services:
   redis01:
     image: redis:7.0.5
-    ports:
-      - "6400:6400"
-    command: redis-server --cluster-enabled yes --port 6400 --cluster-announce-hostname redis01 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis01 --cluster-preferred-endpoint-type hostname
   redis02:
     image: redis:7.0.5
-    ports:
-      - "6401:6401"
-    command: redis-server --cluster-enabled yes --port 6401 --cluster-announce-hostname redis02 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis02 --cluster-preferred-endpoint-type hostname
   redis03:
     image: redis:7.0.5
-    ports:
-      - "6402:6402"
-    command: redis-server --cluster-enabled yes --port 6402 --cluster-announce-hostname redis03 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis03 --cluster-preferred-endpoint-type hostname
   redis04:
     image: redis:7.0.5
-    ports:
-      - "6403:6403"
-    command: redis-server --cluster-enabled yes --port 6403 --cluster-announce-hostname redis04 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis04 --cluster-preferred-endpoint-type hostname
   redis05:
     image: redis:7.0.5
-    ports:
-      - "6404:6404"
-    command: redis-server --cluster-enabled yes --port 6404 --cluster-announce-hostname redis05 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis05 --cluster-preferred-endpoint-type hostname
   redis06:
     image: redis:7.0.5
-    ports:
-      - "6405:6405"
-    command: redis-server --cluster-enabled yes --port 6405 --cluster-announce-hostname redis06 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis06 --cluster-preferred-endpoint-type hostname
   redis07:
     image: redis:7.0.5
-    ports:
-      - "6406:6406"
-    command: redis-server --cluster-enabled yes --port 6406 --cluster-announce-hostname redis07 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis07 --cluster-preferred-endpoint-type hostname
   redis08:
     image: redis:7.0.5
-    ports:
-      - "6407:6407"
-    command: redis-server --cluster-enabled yes --port 6407 --cluster-announce-hostname redis08 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis08 --cluster-preferred-endpoint-type hostname
   redis09:
     image: redis:7.0.5
-    ports:
-      - "6408:6408"
-    command: redis-server --cluster-enabled yes --port 6408 --cluster-announce-hostname redis09 --cluster-preferred-endpoint-type hostname
+    command: redis-server --cluster-enabled yes --port 6379 --cluster-announce-hostname redis09 --cluster-preferred-endpoint-type hostname
   activate:
     image: redis:7.0.5
     depends_on:
@@ -64,10 +46,10 @@ services:
     command: >
       bash -c "
       sleep 10
-      && redis-cli --cluster create redis01:6400 redis02:6401 redis03:6402 --cluster-yes
-      && redis-cli --cluster add-node redis04:6403 redis01:6400 --cluster-slave --cluster-yes
-      && redis-cli --cluster add-node redis05:6404 redis01:6400 --cluster-slave --cluster-yes
-      && redis-cli --cluster add-node redis06:6405 redis01:6400 --cluster-slave --cluster-yes
-      && redis-cli --cluster add-node redis07:6406 redis01:6400 --cluster-slave --cluster-yes
-      && redis-cli --cluster add-node redis08:6407 redis01:6400 --cluster-slave --cluster-yes
-      && redis-cli --cluster add-node redis09:6408 redis01:6400 --cluster-slave --cluster-yes"
+      && redis-cli --cluster create redis01:6379 redis02:6379 redis03:6379 --cluster-yes
+      && redis-cli --cluster add-node redis04:6379 redis01:6379 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis05:6379 redis01:6379 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis06:6379 redis01:6379 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis07:6379 redis01:6379 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis08:6379 redis01:6379 --cluster-slave --cluster-yes
+      && redis-cli --cluster add-node redis09:6379 redis01:6379 --cluster-slave --cluster-yes"

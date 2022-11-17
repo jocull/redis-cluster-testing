@@ -3,7 +3,7 @@ const fs = require('fs');
 const targetImage = 'redis:7.0.5';
 const targetNodeCount = 9;
 const targetPrimaryCount = 3;
-const startPort = 6400;
+const startPort = 6379;
 
 const prelude =
 `version: "3.9"
@@ -19,7 +19,7 @@ const nodes = [];
 for (let i = 0; i < targetNodeCount; i++) {
   nodes.push({
     hostname: 'redis' + (i + 1 + "").padStart(2, '0'),
-    port: startPort + i,
+    port: startPort,
   });
 }
 
@@ -28,9 +28,7 @@ nodes.forEach(node => {
   sections.push(
 `  ${node.hostname}:
     image: ${targetImage}
-    ports:
-      - "${node.port}:${node.port}"
-    command: redis-server --cluster-enabled yes --port ${node.port} --cluster-announce-hostname ${node.hostname} --cluster-preferred-endpoint-type hostname`);
+    command: redis-server --cluster-enabled yes --port ${node.port} --cluster-announce-hostname ${node.hostname} --cluster-preferred-endpoint-type hostname --cluster-node-timeout 5000`);
 });
 
 // Generate initialization script
