@@ -86,7 +86,7 @@ public class SpringBootConsoleApplication implements CommandLineRunner {
 
             IntStream.range(0, 8)
                     .mapToObj(i -> {
-                        Thread t = new Thread(new LargeThrashingTest(pool, 50, 1024 * 10 * (i + 1)));
+                        Thread t = new Thread(new LargeThrashingTest(pool, 50, 1024 * 128 * (i + 1)));
                         t.setName("data-pusher-" + i);
                         t.start();
                         return t;

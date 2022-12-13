@@ -3,16 +3,17 @@ package com.codefromjames;
 import io.github.resilience4j.core.IntervalFunction;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
-import io.github.resilience4j.retry.RetryRegistry;
 import io.lettuce.core.RedisCommandTimeoutException;
 import io.lettuce.core.RedisException;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.cluster.SlotHash;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
-import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
-import io.lettuce.core.cluster.models.partitions.Partitions;
 import io.lettuce.core.protocol.ConnectionIntent;
+import net.jpountz.lz4.LZ4Compressor;
+import net.jpountz.lz4.LZ4Factory;
+import net.jpountz.lz4.LZ4FastDecompressor;
+import net.jpountz.lz4.LZ4SafeDecompressor;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.commons.pool2.ObjectPool;
@@ -27,6 +28,8 @@ import java.util.stream.IntStream;
 public class LargeThrashingTest implements Runnable {
     private static final Logger LOGGER = LoggerFactory.getLogger(LargeThrashingTest.class);
     private static final Random RANDOM = new Random();
+    private static final LZ4Compressor lz4Compressor = LZ4Factory.fastestInstance().fastCompressor();
+    private static final LZ4FastDecompressor lz4Decompressor = LZ4Factory.fastestInstance().fastDecompressor();
 
     private final ObjectPool<StatefulRedisClusterConnection<String, byte[]>> pool;
     private final int valueSizeBytes;
@@ -79,11 +82,12 @@ public class LargeThrashingTest implements Runnable {
                         final RedisCommands<String, byte[]> client = connection.sync();
 
                         Optional.ofNullable(client.get(largeObject.key))
+                                .map(value -> lz4Decompressor.decompress(value, largeObject.valueSizeBytes))
                                 .map(DigestUtils::sha1Hex)
                                 .ifPresent(currentHash -> {
                                     // The previous write might have succeeded before acking somehow, and might match the target hash.
                                     // That would be ok!
-                                    final String targetHash = largeObject.hash;
+                                    final String targetHash = largeObject.rawHash;
                                     final String ackedHash = ackedKeyHashes.get(largeObject.key);
                                     if (ackedHash != null
                                             && !ackedHash.equals(currentHash)
@@ -92,13 +96,13 @@ public class LargeThrashingTest implements Runnable {
                                     }
                                 });
 
-                        client.set(largeObject.key, largeObject.blob);
+                        client.set(largeObject.key, largeObject.compressedBlob);
                         final long replication = client.waitForReplication(1, 2000);
                         if (replication < 1) {
                             throw new RedisCommandTimeoutException("Replication failed w/ replication = " + replication);
                         }
-                        LOGGER.info("Wrote #{}, {} w/ hash {}", counter.getAndIncrement(), largeObject.key, largeObject.hash);
-                        ackedKeyHashes.put(largeObject.key, largeObject.hash);
+                        LOGGER.info("Wrote #{}, {} w/ hash {} @ ratio {}", counter.getAndIncrement(), largeObject.key, largeObject.rawHash, largeObject.compressionRatioStr);
+                        ackedKeyHashes.put(largeObject.key, largeObject.rawHash);
                     });
                 } finally {
                     pool.returnObject(cluster);
@@ -120,14 +124,26 @@ public class LargeThrashingTest implements Runnable {
 
     private static class LargeObject {
         final String key;
-        final byte[] blob;
-        final String hash;
+        final int valueSizeBytes;
+        final byte[] rawBlob;
+        final byte[] compressedBlob;
+        final String rawHash;
+        final String compressedHash;
+        final double compressionRatio;
+        final String compressionRatioStr;
 
         LargeObject(String key, int valueSizeBytes) {
             this.key = key;
-            blob = new byte[valueSizeBytes];
-            RANDOM.nextBytes(blob);
-            this.hash = DigestUtils.sha1Hex(blob);
+            this.valueSizeBytes = valueSizeBytes;
+
+            this.rawBlob = new byte[valueSizeBytes];
+            RANDOM.nextBytes(rawBlob);
+            this.rawHash = DigestUtils.sha1Hex(rawBlob);
+
+            this.compressedBlob = lz4Compressor.compress(rawBlob);
+            this.compressedHash = DigestUtils.sha1Hex(compressedBlob);
+            this.compressionRatio = (double) this.compressedBlob.length / (double) rawBlob.length;
+            this.compressionRatioStr = String.format("%.2f", compressionRatio);
         }
     }
 }
