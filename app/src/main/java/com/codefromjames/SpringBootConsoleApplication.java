@@ -71,6 +71,19 @@ public class SpringBootConsoleApplication implements CommandLineRunner {
                             .build())
                     .build());
 
+            try {
+                final StatefulRedisClusterConnection<String, byte[]> cluster = pool.borrowObject();
+                try {
+                    LOGGER.info("Flushing entire cluster to clear memory...");
+                    cluster.sync().flushall();
+                    LOGGER.info("... done!");
+                } finally {
+                    pool.returnObject(cluster);
+                }
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+
             IntStream.range(0, 8)
                     .mapToObj(i -> {
                         Thread t = new Thread(new LargeThrashingTest(pool, 50, 1024 * 10 * (i + 1)));
