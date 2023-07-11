@@ -15,7 +15,9 @@ import redis.clients.jedis.Connection;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.exceptions.JedisClusterOperationException;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
+import redis.clients.jedis.providers.ClusterConnectionProvider;
 import redis.clients.jedis.util.JedisClusterCRC16;
 
 import java.nio.charset.StandardCharsets;
@@ -31,14 +33,14 @@ public class LargeThrashingTest implements Runnable {
     private static final LZ4Compressor lz4Compressor = LZ4Factory.fastestInstance().fastCompressor();
     private static final LZ4FastDecompressor lz4Decompressor = LZ4Factory.fastestInstance().fastDecompressor();
 
-    private final JedisCluster pool;
+    private final ClusterConnectionProvider connectionProvider;
     private final int valueSizeBytes;
 
     private final Retry retry;
     private final List<String> keySet;
     private final Map<String, String> ackedKeyHashes = new HashMap<>();
 
-    public LargeThrashingTest(JedisCluster pool, int keyCount, int valueSizeBytes) {
+    public LargeThrashingTest(ClusterConnectionProvider connectionProvider, int keyCount, int valueSizeBytes) {
         if (keyCount < 1) {
             throw new IllegalArgumentException("Key count must be >= 1");
         }
@@ -46,7 +48,7 @@ public class LargeThrashingTest implements Runnable {
             throw new IllegalArgumentException("Value byte size must be >= 0");
         }
 
-        this.pool = pool;
+        this.connectionProvider = connectionProvider;
         this.valueSizeBytes = valueSizeBytes;
 
         this.retry = Retry.of("default", RetryConfig.custom()
@@ -77,7 +79,7 @@ public class LargeThrashingTest implements Runnable {
 
                 // Annoying stuff you have to do to get the right connection for the target hash slot.
                 // This way you can hold a specific connection to do the synchronous replication waits.
-                try (Connection conn = pool.getConnectionFromSlot(JedisClusterCRC16.getSlot(largeObject.key))) {
+                try (Connection conn = connectionProvider.getConnectionFromSlot(JedisClusterCRC16.getSlot(largeObject.key))) {
                     final Jedis client = new Jedis(conn);
 
                     final AtomicInteger attemptCounter = new AtomicInteger(1);
@@ -110,6 +112,9 @@ public class LargeThrashingTest implements Runnable {
                 } finally {
                     MDC.remove("attempt");
                 }
+            } catch (JedisConnectionException ex) {
+                LOGGER.error("DB connection exception", ex);
+                connectionProvider.renewSlotCache(); // Internal lock won't do multiple refreshes at once
             } catch (JedisException ex) {
                 LOGGER.error("DB failed", ex);
             } catch (Exception ex) {
