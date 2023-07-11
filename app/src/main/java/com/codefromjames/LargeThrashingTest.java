@@ -19,9 +19,11 @@ import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.commons.pool2.ObjectPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -53,7 +55,10 @@ public class LargeThrashingTest implements Runnable {
                 .maxAttempts(30)
                 .intervalFunction(IntervalFunction.ofExponentialBackoff(Duration.ofMillis(50), 2, Duration.ofSeconds(1)))
                 .failAfterMaxAttempts(true)
-                .retryOnException(ex -> ex instanceof RedisException)
+                .retryOnException(ex -> {
+                    LOGGER.error("Error during retry", ex);
+                    return ex instanceof RedisException;
+                })
                 .build());
 
         this.keySet = IntStream.range(0, keyCount)
@@ -73,7 +78,10 @@ public class LargeThrashingTest implements Runnable {
             try {
                 final StatefulRedisClusterConnection<String, byte[]> cluster = pool.borrowObject();
                 try {
+                    final AtomicInteger attemptCounter = new AtomicInteger(1);
                     retry.executeRunnable(() -> {
+                        MDC.put("attempt", String.valueOf(attemptCounter.getAndIncrement()));
+
                         // Annoying stuff you have to do to get the right connection for the target hash slot.
                         // This way you can hold a specific connection to do the synchronous replication waits.
                         final int slot = SlotHash.getSlot(largeObject.key);
@@ -105,6 +113,7 @@ public class LargeThrashingTest implements Runnable {
                         ackedKeyHashes.put(largeObject.key, largeObject.rawHash);
                     });
                 } finally {
+                    MDC.remove("attempt");
                     pool.returnObject(cluster);
                 }
             } catch (RedisException ex) {
@@ -113,12 +122,6 @@ public class LargeThrashingTest implements Runnable {
                 LOGGER.error("Unexpected exception!", ex);
                 throw new RuntimeException(ex);
             }
-//            try {
-//                Thread.sleep(250);
-//            } catch (InterruptedException ex) {
-//                LOGGER.info("Interrupted", ex);
-//                return;
-//            }
         }
     }
 
