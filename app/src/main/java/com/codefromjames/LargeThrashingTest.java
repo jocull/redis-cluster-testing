@@ -3,24 +3,22 @@ package com.codefromjames;
 import io.github.resilience4j.core.IntervalFunction;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
-import io.lettuce.core.RedisCommandTimeoutException;
-import io.lettuce.core.RedisException;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.sync.RedisCommands;
-import io.lettuce.core.cluster.SlotHash;
-import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
-import io.lettuce.core.protocol.ConnectionIntent;
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Factory;
 import net.jpountz.lz4.LZ4FastDecompressor;
-import net.jpountz.lz4.LZ4SafeDecompressor;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.mutable.MutableInt;
-import org.apache.commons.pool2.ObjectPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import redis.clients.jedis.Connection;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisCluster;
+import redis.clients.jedis.exceptions.JedisClusterOperationException;
+import redis.clients.jedis.exceptions.JedisException;
+import redis.clients.jedis.util.JedisClusterCRC16;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,14 +31,14 @@ public class LargeThrashingTest implements Runnable {
     private static final LZ4Compressor lz4Compressor = LZ4Factory.fastestInstance().fastCompressor();
     private static final LZ4FastDecompressor lz4Decompressor = LZ4Factory.fastestInstance().fastDecompressor();
 
-    private final ObjectPool<StatefulRedisClusterConnection<String, byte[]>> pool;
+    private final JedisCluster pool;
     private final int valueSizeBytes;
 
     private final Retry retry;
     private final List<String> keySet;
     private final Map<String, String> ackedKeyHashes = new HashMap<>();
 
-    public LargeThrashingTest(ObjectPool<StatefulRedisClusterConnection<String, byte[]>> pool, int keyCount, int valueSizeBytes) {
+    public LargeThrashingTest(JedisCluster pool, int keyCount, int valueSizeBytes) {
         if (keyCount < 1) {
             throw new IllegalArgumentException("Key count must be >= 1");
         }
@@ -57,7 +55,7 @@ public class LargeThrashingTest implements Runnable {
                 .failAfterMaxAttempts(true)
                 .retryOnException(ex -> {
                     LOGGER.error("Error during retry", ex);
-                    return ex instanceof RedisException;
+                    return ex instanceof JedisException;
                 })
                 .build());
 
@@ -76,20 +74,17 @@ public class LargeThrashingTest implements Runnable {
             }
             final LargeObject largeObject = new LargeObject(keyRotation.pop(), valueSizeBytes);
             try {
-                final StatefulRedisClusterConnection<String, byte[]> cluster = pool.borrowObject();
-                try {
+
+                // Annoying stuff you have to do to get the right connection for the target hash slot.
+                // This way you can hold a specific connection to do the synchronous replication waits.
+                try (Connection conn = pool.getConnectionFromSlot(JedisClusterCRC16.getSlot(largeObject.key))) {
+                    final Jedis client = new Jedis(conn);
+
                     final AtomicInteger attemptCounter = new AtomicInteger(1);
                     retry.executeRunnable(() -> {
                         MDC.put("attempt", String.valueOf(attemptCounter.getAndIncrement()));
 
-                        // Annoying stuff you have to do to get the right connection for the target hash slot.
-                        // This way you can hold a specific connection to do the synchronous replication waits.
-                        final int slot = SlotHash.getSlot(largeObject.key);
-                        final String nodeId = cluster.getPartitions().getPartitionBySlot(slot).getNodeId();
-                        final StatefulRedisConnection<String, byte[]> connection = cluster.getConnection(nodeId, ConnectionIntent.WRITE);
-                        final RedisCommands<String, byte[]> client = connection.sync();
-
-                        Optional.ofNullable(client.get(largeObject.key))
+                        Optional.ofNullable(client.get(largeObject.key.getBytes(StandardCharsets.UTF_8)))
                                 .map(value -> lz4Decompressor.decompress(value, largeObject.valueSizeBytes))
                                 .map(DigestUtils::sha1Hex)
                                 .ifPresent(currentHash -> {
@@ -104,19 +99,18 @@ public class LargeThrashingTest implements Runnable {
                                     }
                                 });
 
-                        client.set(largeObject.key, largeObject.compressedBlob);
-                        final long replication = client.waitForReplication(1, 2000);
+                        client.set(largeObject.key.getBytes(StandardCharsets.UTF_8), largeObject.compressedBlob);
+                        final long replication = client.waitReplicas(1, 2000);
                         if (replication < 1) {
-                            throw new RedisCommandTimeoutException("Replication failed w/ replication = " + replication);
+                            throw new JedisClusterOperationException("Replication failed w/ replication = " + replication);
                         }
                         LOGGER.info("Wrote #{}, {} w/ hash {} @ ratio {}", counter.getAndIncrement(), largeObject.key, largeObject.rawHash, largeObject.compressionRatioStr);
                         ackedKeyHashes.put(largeObject.key, largeObject.rawHash);
                     });
                 } finally {
                     MDC.remove("attempt");
-                    pool.returnObject(cluster);
                 }
-            } catch (RedisException ex) {
+            } catch (JedisException ex) {
                 LOGGER.error("DB failed", ex);
             } catch (Exception ex) {
                 LOGGER.error("Unexpected exception!", ex);
