@@ -10,3 +10,18 @@ Due to the implementation of Redis Cluster, the only way I could find to attach 
 - Docker compose second cluster in `/cluster-b`
 
 See [`notes.md`](notes.md) for some example commands to join the cluster nodes together. It's a very manual process.
+
+## Basic steps to run the application
+
+```bash
+# In one terminal
+cd cluster-c
+docker compose up
+
+# In another terminal, project root
+docker compose up
+```
+
+Then connect the JVM debugger to the running Docker application, or remove the JVM debugger options from `docker-compose.yml` in the repository root.
+
+JVM debugger attachment arguments: `-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:8000`
