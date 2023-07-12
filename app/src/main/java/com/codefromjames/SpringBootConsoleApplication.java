@@ -9,10 +9,8 @@ import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.JedisCluster;
-import redis.clients.jedis.providers.ClusterConnectionProvider;
 
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -55,42 +53,22 @@ public class SpringBootConsoleApplication implements CommandLineRunner {
             LOGGER.info("... done!");
         }
 
-        try (final ClusterConnectionProvider connectionProvider = new ClusterConnectionProvider(hosts, jedisClientConfig)) {
-            // Kind of a silly background loop, but it's easy to write. Better as a scheduled task.
-            final Thread topologyRefreshThread = new Thread(() -> {
-                while (true) {
-                    try {
-                        //noinspection BusyWait
-                        Thread.sleep(15_000);
-                        connectionProvider.renewSlotCache(); // Background thread refreshes in case JedisConnectionException is not caught in runtime tests
-                    } catch (InterruptedException e) {
-                        return;
-                    }
-                }
-            });
-            topologyRefreshThread.setName("jedis-topology-refresh");
-            topologyRefreshThread.setDaemon(true);
-            topologyRefreshThread.start();
-
-            try {
-                IntStream.range(0, 8)
-                        .mapToObj(i -> {
-                            Thread t = new Thread(new LargeThrashingTest(connectionProvider, 50, 1024 * 128 * (i + 1)));
-                            t.setName("data-pusher-" + i);
-                            t.start();
-                            return t;
-                        })
-                        .collect(Collectors.toList())
-                        .forEach(t -> {
-                            try {
-                                t.join();
-                            } catch (InterruptedException ex) {
-                                LOGGER.info("Interrupted", ex);
-                            }
-                        });
-            } finally {
-                topologyRefreshThread.interrupt();
-            }
+        try (final JedisCluster client = new JedisCluster(hosts, jedisClientConfig)) {
+            IntStream.range(0, 8)
+                    .mapToObj(i -> {
+                        Thread t = new Thread(new LargeThrashingTest(client, 50, 1024 * 128 * (i + 1)));
+                        t.setName("data-pusher-" + i);
+                        t.start();
+                        return t;
+                    })
+                    .collect(Collectors.toList())
+                    .forEach(t -> {
+                        try {
+                            t.join();
+                        } catch (InterruptedException ex) {
+                            LOGGER.info("Interrupted", ex);
+                        }
+                    });
         }
     }
 }
